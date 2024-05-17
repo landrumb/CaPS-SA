@@ -11,6 +11,8 @@
 #include <chrono>
 #include <immintrin.h>
 #include <iostream>
+
+#include "memoization_table.h"
 // =============================================================================
 
 namespace CaPS_SA
@@ -39,6 +41,8 @@ private:
     idx_t* part_ruler_; // "Ruler" for the partitions—contains the indices of each sub-subarray in each partition.
     std::atomic_uint64_t solved_;   // Progress tracker—number of subproblems solved in some step.
 
+    memoization_table<idx_t> mem_table;
+
     static constexpr idx_t default_subproblem_count = 8192; // Default subproblem-count to use in construction.
     static constexpr idx_t nested_par_grain_size = (1lu << 13); // Granularity for nested parallelism to kick in.
 
@@ -64,13 +68,13 @@ private:
     // Merges the sorted collections of suffixes, `X` and `Y`, with lengths
     // `len_x` and `len_y` and LCP arrays `LCP_x` and `LCP_y` respectively, into
     // `Z`. Also constructs `Z`'s LCP array in `LCP_z`.
-    void merge(const idx_t* X, idx_t len_x, const idx_t* Y, idx_t len_y, const idx_t* LCP_x, const idx_t* LCP_y, idx_t* Z, idx_t* LCP_z) const;
+    void merge(const idx_t* X, idx_t len_x, const idx_t* Y, idx_t len_y, const idx_t* LCP_x, const idx_t* LCP_y, idx_t* Z, idx_t* LCP_z);
 
     // Merge-sorts the suffix collection `X` of length `n` into `Y`. Also
     // constructs the LCP array of `X` in `LCP`, using `W` as working space.
     // A necessary precondition is that `Y` must be equal to `X`.  `X` may
     // not remain the same after the sort.
-    void merge_sort(idx_t* X, idx_t* Y, idx_t n, idx_t* LCP, idx_t* W) const;
+    void merge_sort(idx_t* X, idx_t* Y, idx_t n, idx_t* LCP, idx_t* W);
 
     // Initializes internal data structures for the construction algorithm.
     void initialize();
@@ -180,7 +184,7 @@ inline T_idx_ Suffix_Array<T_idx_>::lcp_opt_avx(const char* str1, const char* st
       __m256i v1 = _mm256_loadu_si256((__m256i*)(str1 + i));
       __m256i v2 = _mm256_loadu_si256((__m256i*)(str2 + i));
       __m256i cmp = _mm256_cmpeq_epi8(v1, v2);
-      int mask = _mm256_movemask_epi8(cmp);
+      uint32_t mask = _mm256_movemask_epi8(cmp);
       if (mask != 0xFFFFFFFF) {
         int j = __builtin_ctz(~mask) + i;
         return static_cast<idx_t>(j);
